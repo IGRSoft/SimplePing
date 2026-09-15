@@ -1,81 +1,7 @@
 //: Playground - noun: a place where people can play
 
-#if os(iOS) || os(watchOS) || os(tvOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
+import Foundation
 
-
-public extension Data {
-    var hex: String {
-        return self.map { String(format: "%02hhx", $0) }.joined()
-    }
-}
-
-extension Data {
-    public func to<T>(_ type: T.Type) -> T {
-        return self.withUnsafeBytes { (body: UnsafeRawBufferPointer) in
-            body.baseAddress!.assumingMemoryBound(to: T.self).pointee
-        }
-    }
-    
-    public var unsafeBytes: UnsafeRawPointer {
-        return self.withUnsafeBytes { (body: UnsafeRawBufferPointer) in
-            let bufferPointer = body.baseAddress!.assumingMemoryBound(to: UInt8.self)
-            return UnsafeRawPointer(bufferPointer)
-        }
-    }
-    
-    public func srcAddress() -> String? {
-        var ipPtr: IPHeader? = nil
-        var msg: String?
-
-        if (self.count) >= (MemoryLayout<IPHeader>.size + MemoryLayout<ICMPHeader>.size) {
-            ipPtr = self.to(IPHeader.self)
-            if let sourceAddress = ipPtr?.sourceAddress.0, let aSourceAddress = ipPtr?.sourceAddress.1, let aASourceAddress = ipPtr?.sourceAddress.2, let aAASourceAddress = ipPtr?.sourceAddress.3 {
-                msg = "\(sourceAddress).\(aSourceAddress).\(aASourceAddress).\(aAASourceAddress)"
-            }
-        }
-        
-        return msg
-    }
-}
-
-
-public typealias IPAddress = (UInt8, UInt8, UInt8, UInt8)
-
-public struct IPHeader {
-    public var versionAndHeaderLength: UInt8
-    public var differentiatedServices: UInt8
-    public var totalLength: UInt16
-    public var identification: UInt16
-    public var flagsAndFragmentOffset: UInt16
-    public var timeToLive: UInt8
-    public var `protocol`: UInt8
-    public var headerChecksum: UInt16
-    public var sourceAddress: IPAddress
-    public var destinationAddress: IPAddress
-}
-
-
-public struct ICMPHeader {
-    public var type: UInt8      /* type of message*/
-    public var code: UInt8      /* type sub code */
-    public var checkSum: UInt16 /* ones complement cksum of struct */
-    public var identifier: UInt16
-    public var sequenceNumber: UInt16
-}
-
-public struct ICMPv4Type {
-    public static let EchoReply: UInt8   = 0    // code is always 0
-    public static let EchoRequest: UInt8 = 8    // code is always 0
-}
-
-public struct ICMPv6Type {
-    public static let EchoReply: UInt8   = 129  // code is always 0
-    public static let EchoRequest: UInt8 = 128  // code is always 0
-}
 
 public protocol SimplePingDelegate: AnyObject {
     func pinger(_ pinger: Ping, didStartWithAddress address: String)
@@ -101,55 +27,6 @@ public protocol Ping {
     func setTTL(_ ttl: Int)
 }
 
-fileprivate func checksum(_ buf: UnsafeRawPointer, _ bufLen: Int) -> UInt16 {
-    var bytesLeft: Int = bufLen
-    var sum: UInt32 = 0
-    var cursor: UnsafePointer<UInt16> = buf.assumingMemoryBound(to: UInt16.self)
-    
-    while bytesLeft > 1 {
-        sum += UInt32(cursor.pointee)
-        cursor = cursor.advanced(by: 1)
-        bytesLeft -= 2
-    }
-    
-    if bytesLeft == 1 {
-        sum += UInt32(cursor.pointee & 0xff00)
-    }
-    
-    sum = (sum >> 16) + (sum & 0xffff)
-    sum += (sum >> 16)
-    sum &= 0x0000ffff
-    let answer: UInt16 = ~UInt16(sum)
-    return answer
-}
-
-public func hostStringWithData(_ data: Data) -> String {
-    let maxHostLen = UInt32(NI_MAXHOST)
-    let maxPortLen = UInt32(NI_MAXSERV)
-    let hostStrRef = UnsafeMutablePointer<Int8>.allocate(capacity: Int(maxHostLen))
-    defer {
-        hostStrRef.deallocate()
-    }
-    let portStrRef = UnsafeMutablePointer<Int8>.allocate(capacity: Int(maxPortLen))
-    defer {
-        portStrRef.deallocate()
-    }
-    
-    var addr = data.to(sockaddr.self)
-    getnameinfo(&addr,
-                socklen_t(data.count),
-                hostStrRef,
-                maxHostLen,
-                portStrRef,
-                maxPortLen,
-                NI_NUMERICHOST | NI_NUMERICSERV)
-    
-    let hostStr = String(cString: hostStrRef, encoding: .ascii)
-    let portStr = String(cString: portStrRef, encoding: .ascii)
-    let addressString = "\(hostStr ?? "nil"):\(portStr ?? "nil")"
-    return addressString
-}
-
 public class SimplePing: Ping {
     public enum AddressStyle: Int {
         case any
@@ -165,11 +42,11 @@ public class SimplePing: Ping {
         public var errorDescription: String? {
             switch self {
             case .networkError(let type, let code):
-                return "Network error occured: \(type): \(code)"
+                "Network error occured: \(type): \(code)"
             case .posixError(let type, let code):
-                return "POSIX error occured: \(type): \(code)"
+                "POSIX error occured: \(type): \(code)"
             case .hostNotFound:
-                return "Host not found"
+                "Host not found"
             }
         }
     }
@@ -202,11 +79,11 @@ public class SimplePing: Ping {
     }
     
     public var hostAddressFamily: sa_family_t {
-        if let address = hostAddress,
+        return if let address = hostAddress,
             address.count >= MemoryLayout<sockaddr>.size {
-            return address.to(sockaddr.self).sa_family
+            address.to(sockaddr.self).sa_family
         } else {
-            return sa_family_t(AF_UNSPEC)
+            sa_family_t(AF_UNSPEC)
         }
     }
     
@@ -589,7 +466,7 @@ public class SimplePing: Ping {
         let source = CFSocketCreateRunLoopSource(kCFAllocatorDefault, self._socket, 0)
         CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), source, CFRunLoopMode.defaultMode)
         
-        self.delegate?.pinger(self, didStartWithAddress: hostStringWithData(hostAddress))
+        self.delegate?.pinger(self, didStartWithAddress: hostAddress.hostString())
     }
     
     private func hostResolutionDone(_ host: CFHost) {
@@ -639,5 +516,27 @@ public class SimplePing: Ping {
             CFSocketInvalidate(socket)
             self._socket = nil
         }
+    }
+    
+    private func checksum(_ buf: UnsafeRawPointer, _ bufLen: Int) -> UInt16 {
+        var bytesLeft: Int = bufLen
+        var sum: UInt32 = 0
+        var cursor: UnsafePointer<UInt16> = buf.assumingMemoryBound(to: UInt16.self)
+        
+        while bytesLeft > 1 {
+            sum += UInt32(cursor.pointee)
+            cursor = cursor.advanced(by: 1)
+            bytesLeft -= 2
+        }
+        
+        if bytesLeft == 1 {
+            sum += UInt32(cursor.pointee & 0xff00)
+        }
+        
+        sum = (sum >> 16) + (sum & 0xffff)
+        sum += (sum >> 16)
+        sum &= 0x0000ffff
+        let answer: UInt16 = ~UInt16(sum)
+        return answer
     }
 }

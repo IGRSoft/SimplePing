@@ -3,6 +3,11 @@ import UIKit
 #elseif os(macOS)
 import Cocoa
 #endif
+import PlaygroundSupport
+
+PlaygroundPage.current.needsIndefiniteExecution = true 
+
+import SimplePing
 
 class Main: NSObject {
     var forceIPv4 = false
@@ -33,18 +38,18 @@ class Main: NSObject {
     }
     
     @objc func sendPing() {
-        self.pinger?.sendPingWithData(nil)
+        self.pinger?.sendPing(nil)
     }
 }
 
-extension Main: PingDelegate {
+extension Main: SimplePingDelegate {
     func pinger(_ pinger: Ping, didStartWithAddress address: String) {
         print("start \(address)")
         self.sendPing()
     }
     
     func pinger(_ pinger: Ping, didStartWithAddress address: Data) {
-        print("pinging \(hostStringWithData(address))")
+        print("pinging \(address.hostString())")
         self.sendPing()
         self.timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(sendPing), userInfo: nil, repeats: true)
     }
